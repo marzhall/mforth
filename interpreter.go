@@ -125,6 +125,14 @@ func (s *StackFlowControl) String() string {
 
 //---------------------------------------------
 
+func goBoolToMforthBool(val bool) string {
+	if val {
+		return "true"
+	}
+
+	return "false"
+}
+
 type parseContext struct {
 	PreviousContext *parseContext
 	PreviousStackEntry StackEntry
@@ -153,7 +161,11 @@ func parse(tokens chan string, stack StackEntry, resultChan chan StackEntry) {
 			fallthrough
 		case "dup":
 			fallthrough
-		case ".":
+		case "<":
+			fallthrough
+		case ">":
+			fallthrough
+		case "==":
 			fallthrough
 		case "-":
 			fallthrough
@@ -254,6 +266,31 @@ func EvaluateStack(s StackEntry) StackEntry {
 			secondValue := secondVar.Value()
 			valTwoFloat, _ := strconv.ParseFloat(secondValue, 64)
 			tempstack = &StackStatement{strconv.FormatFloat(valOneFloat / valTwoFloat, 'f', -1, 64), Num, tempstack}
+			return tempstack
+		case "==":
+			firstVar, tempstack := EvaluateStack(tempstack).Pop()
+			firstValue := firstVar.Value()
+			secondVar, tempstack := EvaluateStack(tempstack).Pop()
+			secondValue := secondVar.Value()
+			tempstack = &StackStatement{goBoolToMforthBool(firstValue == secondValue), Num, tempstack}
+			return tempstack
+		case ">":
+			firstVar, tempstack := EvaluateStack(tempstack).Pop()
+			firstValue := firstVar.Value()
+			valOneFloat, _ := strconv.ParseFloat(firstValue, 64)
+			secondVar, tempstack := EvaluateStack(tempstack).Pop()
+			secondValue := secondVar.Value()
+			valTwoFloat, _ := strconv.ParseFloat(secondValue, 64)
+			tempstack = &StackStatement{goBoolToMforthBool(valOneFloat > valTwoFloat), Num, tempstack}
+			return tempstack
+		case "<":
+			firstVar, tempstack := EvaluateStack(tempstack).Pop()
+			firstValue := firstVar.Value()
+			valOneFloat, _ := strconv.ParseFloat(firstValue, 64)
+			secondVar, tempstack := EvaluateStack(tempstack).Pop()
+			secondValue := secondVar.Value()
+			valTwoFloat, _ := strconv.ParseFloat(secondValue, 64)
+			tempstack = &StackStatement{goBoolToMforthBool(valOneFloat < valTwoFloat), Num, tempstack}
 			return tempstack
 		case "+":
 			firstVar, tempstack := EvaluateStack(tempstack).Pop()

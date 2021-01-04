@@ -25,7 +25,7 @@ Is analagous to our earlier `2 2 +` example; we just added the `2`s and `+` one 
 # Operators and control structures
 The operations currently supported are:
 
-- The arithmetic operators `+, -, /, *`. All numbers placed on the stack  are interpereted as doubles.
+- The arithmetic operators `+, -, /, *`. All numbers placed on the stack are interpereted as doubles.
 - The `drop` operator, which drops the value previous to it on the stack.
 
 		mforth: test 4
@@ -49,3 +49,4 @@ The operations currently supported are:
 		> "yay!"
 		mforth: hjsdklfhjdk if "yay!" then
 		>
+- The comparison operators `>, <, ==`. `<~ and `>` operate on numbers; `==` performs a simple string comparison.
