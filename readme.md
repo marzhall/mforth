@@ -27,21 +27,24 @@ The operations currently supported are:
 
 - The arithmetic operators `+, -, /, *`. All numbers placed on the stack  are interpereted as doubles.
 - The `drop` operator, which drops the value previous to it on the stack.
+
 		CMD: test 4
 		test 4
 		CMD: drop
 		test
 - The `dup` operator, which copies the value before it and duplicates it on the stack
+
 		CMD: 4 dup
 		4 4
 - the `swap` command, which swaps the two values on the stack before it. E.g.,
+
 		CMD: 4 5
 		4 5
 		CMD: swap
 		5 4
 
 - `if` statements of the form `<condition> if <thing to do> then`. 'true' is the only accepted boolean value; all other values evaluate to false.
+
 		CMD: true if "yay!" then
 		"yay!"
 		CMD: hjsdklfhjdk if "yay!" then
-	
