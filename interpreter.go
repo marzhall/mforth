@@ -288,7 +288,7 @@ func main () {
 	reader := bufio.NewReader(os.Stdin)
 	var stack StackEntry = nil
 	for ;; {
-		fmt.Print("CMD: ")
+		fmt.Print("mforth: ")
 		text, err := reader.ReadString('\n')
 		if (err == io.EOF) {
 			os.Exit(0)
@@ -299,6 +299,7 @@ func main () {
 		// fmt.Println("Done tokenizing. About to evaluateStack")
 		stack = EvaluateStack(stack)
 		// fmt.Println("Done eval the stack. About to print the stack")
+		print("> ")
 		if (stack != nil) {
 			fmt.Println(stack)
 		} else {
