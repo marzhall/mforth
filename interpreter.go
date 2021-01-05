@@ -175,6 +175,8 @@ func parse(tokens chan string, stack StackEntry, resultChan chan StackEntry) {
 			fallthrough
 		case ">":
 			fallthrough
+		case "!":
+			fallthrough
 		case ".":
 			fallthrough
 		case "==":
@@ -299,6 +301,16 @@ func EvaluateStack(s StackEntry) StackEntry {
 			secondValue := secondVar.Value()
 			valTwoFloat, _ := strconv.ParseFloat(secondValue, 64)
 			tempstack = &StackStatement{goBoolToMforthBool(valOneFloat > valTwoFloat), Num, tempstack}
+			return tempstack
+		case "!":
+			firstVar, tempstack := EvaluateStack(tempstack).Pop()
+			firstValue := firstVar.Value()
+			result := "true"
+			if (firstValue == "true") {
+				result = "false"
+			}
+
+			tempstack = &StackStatement{result, Num, tempstack}
 			return tempstack
 		case "<":
 			firstVar, tempstack := EvaluateStack(tempstack).Pop()
