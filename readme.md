@@ -52,7 +52,7 @@ The operations currently supported are:
 		> "yay!"
 		mforth: hjsdklfhjdk if "yay!" then
 		>
-- The comparison operators `>, <, ==`. `<~ and `>` operate on numbers; `==` performs a simple string comparison.
+- The comparison operators `>, <,`  and `==`, which operate on numbers; `==` performs a simple string comparison.
 - The `!` operator, which will change the value `true` into `false`, and any string != `true` to `true`.
 
 	mforth: true !
