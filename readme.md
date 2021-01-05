@@ -1,4 +1,4 @@
-# Mforth
+# mforth
 
 A small forth-like.
 
@@ -22,10 +22,12 @@ Stack values are kept after each evaluation. E.g.:
 
 Is analagous to our earlier `2 2 +` example; we just added the `2`s and `+` one command at a time instead of all at once.
 
-# Operators and control structures
+## Operators and control structures
 The operations currently supported are:
 
+### Simple Statment Operators
 - The arithmetic operators `+, -, /, *`. All numbers placed on the stack are interpereted as doubles.
+- The `.` operator, which prints the entire stack before it.
 - The `drop` operator, which drops the value previous to it on the stack.
 
 		mforth: test 4
@@ -43,6 +45,7 @@ The operations currently supported are:
 		mforth: swap
 		> 5 4
 
+### Conditional Operations
 - `if` statements of the form `<condition> if <thing to do> then`. 'true' is the only accepted boolean value; all other values evaluate to false.
 
 		mforth: true if "yay!" then

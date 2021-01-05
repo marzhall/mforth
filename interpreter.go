@@ -7,6 +7,7 @@ import (
     "io"
     "strings"
     "strconv"
+    //"runtime/debug"
 )
 
 type ValueType int
@@ -25,7 +26,9 @@ func (v ValueType) String() string {
 }
 
 type StackEntry interface {
+	String() string
 	Previous() StackEntry
+	Peek() StackEntry
 	Pop() (StackEntry, StackEntry)
 	Append(newEntry StackEntry)
 	ValueType() ValueType
@@ -53,6 +56,11 @@ func(s *StackStatement) Append(newEntry StackEntry) {
 	}
 }
 
+func(s *StackStatement) Peek() StackEntry {
+	// fmt.Println("s previous is", s.previous.Value())
+	return s.previous
+}
+
 func(s *StackStatement) Previous() StackEntry {
 	// fmt.Println("s previous is", s.previous.Value())
 	return s.previous
@@ -71,14 +79,12 @@ func (s *StackStatement) Pop() (StackEntry, StackEntry) {
 }
 
 func (s *StackStatement) String() string {
-	str := ""
-	var temp StackEntry = s
-	for temp != nil {
-		str = temp.Value() + " " + str
-		temp = temp.Previous()
+	prevStr := ""
+	if (s.previous != nil) {
+		prevStr = s.previous.String() + " "
 	}
 
-	return str
+	return prevStr + s.Value()
 }
 
 // StackFlowcontrol ----------------------------
@@ -103,23 +109,22 @@ func (s *StackFlowControl) Pop() (StackEntry, StackEntry) {
 	return s, s.Previous()
 }
 
+func(s *StackFlowControl) Peek() StackEntry {
+	return s.previous
+}
 
 func (s *StackFlowControl) String() string {
-	str := ""
-
-	str = s.Value() + " " + str
-	var temp StackEntry
-	temp = s
-	for temp != nil {
-		str = temp.Value() + " " + str
+	branchStr := ""
+	prevStr := ""
+	if (s.branch != nil) {
+		branchStr = s.branch.String()
 	}
 
-	for temp != nil {
-		str = temp.Value() + " " + str
-		temp = temp.Previous()
+	if (s.previous != nil) {
+		prevStr = s.previous.String() + " "
 	}
 
-	return str
+	return prevStr + s.Value() + " " + branchStr
 }
 
 
@@ -140,19 +145,24 @@ type parseContext struct {
 
 // Generate a syntax tree from the parsed tokens
 func parse(tokens chan string, stack StackEntry, resultChan chan StackEntry) {
+	tempstack := stack
+	// fmt.Println("Starting a new parse stack.")
 	for value := range tokens {
 		value = strings.TrimSpace(value)
 		switch value {
 		case "if":
+			// fmt.Println("starting the calculation of an if")
 			childBranchResult := make(chan StackEntry, 1)
 			parse(tokens, nil, childBranchResult)
 			childBranch := <-childBranchResult
-			newEntry := &StackFlowControl{&StackStatement{value, FlowControl, stack}, childBranch}
-			stack = newEntry
-			closingThen := &StackStatement{"then", BuiltinOp, stack}
-			stack = closingThen
+			// fmt.Println("in parse, child branch is", childBranch)
+			newEntry := &StackFlowControl{&StackStatement{value, FlowControl, tempstack}, childBranch}
+			tempstack = newEntry
+			closingThen := &StackStatement{"then", BuiltinOp, tempstack}
+			tempstack = closingThen
 		case "then":
-			break
+			resultChan <- tempstack
+			return
 		case "else":
 			fallthrough
 		case "swap":
@@ -165,6 +175,8 @@ func parse(tokens chan string, stack StackEntry, resultChan chan StackEntry) {
 			fallthrough
 		case ">":
 			fallthrough
+		case ".":
+			fallthrough
 		case "==":
 			fallthrough
 		case "-":
@@ -174,23 +186,23 @@ func parse(tokens chan string, stack StackEntry, resultChan chan StackEntry) {
 		case "*":
 			fallthrough
 		case "+":
-			newEntry := &StackStatement{value, BuiltinOp, stack}
-			stack = newEntry
+			newEntry := &StackStatement{value, BuiltinOp, tempstack}
+			tempstack = newEntry
 		default:
 			//fmt.Println("tokenizing", value)
-			if (stack != nil) {
-				//fmt.Println("stack head is currently ", stack.Value())
+			if (tempstack != nil) {
+				//fmt.Println("tempstack head is currently ", tempstack.Value())
 			}
-			newEntry := &StackStatement{value, Num, stack}
-			stack = newEntry
-			//fmt.Println("stack head is now ", stack.Value())
-			if (stack.Previous() != nil) {
-				//fmt.Println("stack previous is ", stack.Previous().Value())
+			newEntry := &StackStatement{value, Num, tempstack}
+			tempstack = newEntry
+			//fmt.Println("tempstack head is now ", tempstack.Value())
+			if (tempstack.Previous() != nil) {
+				//fmt.Println("tempstack previous is ", tempstack.Previous().Value())
 			}
 		}
 	}
 
-	resultChan <- stack
+	resultChan <- tempstack
 }
 
 func tokenize(text string, stack StackEntry) StackEntry {
@@ -274,6 +286,11 @@ func EvaluateStack(s StackEntry) StackEntry {
 			secondValue := secondVar.Value()
 			tempstack = &StackStatement{goBoolToMforthBool(firstValue == secondValue), Num, tempstack}
 			return tempstack
+		case ".":
+			fmt.Println("The stack before evaluating the . operator:\n", currentEntry)
+			evalResults := EvaluateStack(tempstack)
+			fmt.Println("The stack after evaluating the . operator:\n", evalResults)
+			return evalResults
 		case ">":
 			firstVar, tempstack := EvaluateStack(tempstack).Pop()
 			firstValue := firstVar.Value()
