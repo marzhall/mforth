@@ -55,7 +55,7 @@ The operations currently supported are:
 - The comparison operators `>, <,`  and `==`, which operate on numbers; `==` performs a simple string comparison.
 - The `!` operator, which will change the value `true` into `false`, and any string != `true` to `true`.
 
-	mforth: true !
-	> false
-	mforth: !
-	> true
+		mforth: true !
+		> false
+		mforth: !
+		> true
