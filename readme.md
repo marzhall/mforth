@@ -1,5 +1,5 @@
 # mforth: 
-## It's turing-complete!
+## *It's turing-complete!*
 
 A small forth-like.
 
