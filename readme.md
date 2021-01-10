@@ -64,6 +64,7 @@ The operations currently supported are:
 `dec <statements> <name> as` is the format for functions, e.g.:
 
 Aliasing the plus operator:
+
 	mforth: dec + plus as
 	>
 	mforth: 2 2 plus
@@ -72,6 +73,7 @@ Aliasing the plus operator:
 
 
 Writing a simple factorial:
+
 	mforth: dec dup 1 == ! if dup 1 - fact * then fact as
 	> 
 	mforth: 4 fact
