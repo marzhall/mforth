@@ -59,3 +59,15 @@ The operations currently supported are:
 		> false
 		mforth: !
 		> true
+### Function Definitions
+
+`dec <statements> <name> as` is the format for functions, e.g.:
+
+	mforth: dec dup 1 == ! if dup 1 - fact * then fact as
+	> fact
+	mforth: 4 fact
+	> fact 24
+	mforth: 3 fact
+	> fact 24 6
+	mforth: 5 fact
+	> fact 24 6 120
