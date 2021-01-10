@@ -1,4 +1,4 @@
-# mforth
+# mforth: It's turing-complete!
 
 A small forth-like.
 
@@ -46,11 +46,11 @@ The operations currently supported are:
 		> 5 4
 
 ### Conditional Operations
-- `if` statements of the form `<condition> if <thing to do> then`. 'true' is the only accepted boolean value; all other values evaluate to false.
+- `if` statements of the form `<condition> if <thing to do> then`. The boolean values are 'true' and 'false'.
 
 		mforth: true if "yay!" then
 		> "yay!"
-		mforth: hjsdklfhjdk if "yay!" then
+		mforth: false if "yay!" then
 		>
 - The comparison operators `>, <,`  and `==`, which operate on numbers; `==` performs a simple string comparison.
 - The `!` operator, which will change the value `true` into `false`, and any string != `true` to `true`.
