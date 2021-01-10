@@ -69,7 +69,6 @@ Aliasing the plus operator:
 	>
 	mforth: 2 2 plus
 	> 4
-	mforth:
 
 
 Writing a simple factorial:
