@@ -9,7 +9,6 @@ import (
     "strconv"
     "gitlab.com/tslocum/cview"
     "github.com/gdamore/tcell"
-    "time"
 
     //"runtime/debug"
     // "reflect"
@@ -262,11 +261,16 @@ func tokenize(text string, stack StackEntry) StackEntry {
 		return stack
 	}
 
-	values := strings.Split(text, " ")
+	values := strings.Fields(text)
 	tokChan := make(chan string, 10)
 	go func(){
 		for _, value := range(values) {
-			tokChan <- value
+			if value == " " {
+				print("lol")
+				continue
+			}
+
+			tokChan <- strings.TrimSpace(value)
 		}
 
 		close(tokChan)
@@ -378,6 +382,9 @@ func EvaluateStack(s StackEntry, namespace *Namespace) StackEntry {
 			return tempstack
 		case "*":
 			firstVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			if (firstVar == nil || tempstack == nil) {
+				return currentEntry
+			}
 			firstValue := firstVar.Value()
 			valOneFloat, _ := strconv.ParseFloat(firstValue, 64)
 			secondVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
@@ -387,6 +394,9 @@ func EvaluateStack(s StackEntry, namespace *Namespace) StackEntry {
 			return tempstack
 		case "/":
 			firstVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			if (firstVar == nil || tempstack == nil) {
+				return currentEntry
+			}
 			firstValue := firstVar.Value()
 			valOneFloat, _ := strconv.ParseFloat(firstValue, 64)
 			secondVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
@@ -396,6 +406,9 @@ func EvaluateStack(s StackEntry, namespace *Namespace) StackEntry {
 			return tempstack
 		case "==":
 			firstVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			if (firstVar == nil || tempstack == nil) {
+				return currentEntry
+			}
 			firstValue := firstVar.Value()
 			secondVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
 			secondValue := secondVar.Value()
@@ -408,6 +421,9 @@ func EvaluateStack(s StackEntry, namespace *Namespace) StackEntry {
 			return evalResults
 		case ">":
 			firstVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			if (firstVar == nil || tempstack == nil) {
+				return currentEntry
+			}
 			firstValue := firstVar.Value()
 			valOneFloat, _ := strconv.ParseFloat(firstValue, 64)
 			secondVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
@@ -427,6 +443,9 @@ func EvaluateStack(s StackEntry, namespace *Namespace) StackEntry {
 			return tempstack
 		case "<":
 			firstVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			if (firstVar == nil || tempstack == nil) {
+				return currentEntry
+			}
 			firstValue := firstVar.Value()
 			valOneFloat, _ := strconv.ParseFloat(firstValue, 64)
 			secondVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
@@ -436,6 +455,9 @@ func EvaluateStack(s StackEntry, namespace *Namespace) StackEntry {
 			return tempstack
 		case "+":
 			firstVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			if (firstVar == nil || tempstack == nil) {
+				return currentEntry
+			}
 			firstValue := firstVar.Value()
 			valOneFloat, _ := strconv.ParseFloat(firstValue, 64)
 			secondVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
@@ -445,6 +467,9 @@ func EvaluateStack(s StackEntry, namespace *Namespace) StackEntry {
 			return tempstack
 		case "-":
 			firstVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			if (firstVar == nil || tempstack == nil) {
+				return currentEntry
+			}
 			firstValue := firstVar.Value()
 			valOneFloat, _ := strconv.ParseFloat(firstValue, 64)
 			secondVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
@@ -468,7 +493,7 @@ type StackPair struct {
 	StackView cview.Primitive
 }
 
-func CreateStackPair(stack StackEntry, namespace *Namespace, makeNewEntry chan StackEntry) (*StackPair, StackEntry) {
+func CreateStackPair(stack StackEntry, namespace *Namespace, stackUpdates chan StackEntry, makeNewEntry chan StackEntry) (*StackPair, StackEntry) {
 	if (stack != nil) {
 		stack = stack.Copy()
 	}
@@ -481,24 +506,41 @@ func CreateStackPair(stack StackEntry, namespace *Namespace, makeNewEntry chan S
 	inputField := cview.NewInputField()
 	inputField.SetLabel("@one: ")
 	inputField.SetFieldWidth(0)
-	once := true
 	inputField.SetDoneFunc(func(key tcell.Key) {
 		// fmt.Println("About to tokenize")
+		if stackUpdates != nil {
+			getLatestStack:
+			for ;; {
+				select {
+				case stack = <-stackUpdates:
+					continue
+				default:
+					break getLatestStack
+				}
+			}
+		}
+
 		text := inputField.GetText()
 		if (text != "") {
 			stack = tokenize(text, stack)
 			// fmt.Println("Done tokenizing. About to evaluateStack")
 			stack = EvaluateStack(stack, namespace)
 			// fmt.Println("Done eval the stack. About to print the stack")
+			emptyOldStackValues:
+			for ;; {
+				select {
+				case <-makeNewEntry:
+					continue
+				default:
+					break emptyOldStackValues
+				}
+			}
+			makeNewEntry <- stack
 		}
 		if (stack != nil) {
 			box.SetText(stack.String())
 		} else {
 			box.SetText("")
-		}
-		if (once) {
-			makeNewEntry <- stack
-			once=false
 		}
 	})
 
@@ -512,27 +554,23 @@ func main () {
 
 	app := cview.NewApplication()
 	flex := cview.NewGrid()
+	app.EnableMouse(true)
 	app.SetRoot(flex, true)
 	cellIndex := 0
-	go func (){
-		for ;; {
-			newChan := make(chan StackEntry)
-			sp, newstack := CreateStackPair(stack, namespace, newChan)
-			stack = newstack
+	var stackUpdateChan chan StackEntry = nil
+	responseChan := make(chan StackEntry,1)
+	func (){
+		x := 0
+		for x < 6 {
+			x += 1
+			sp, _ := CreateStackPair(stack, namespace, stackUpdateChan, responseChan)
 			app.SetFocus(sp.Input)
 			flex.AddItem(sp.Input, cellIndex, 0, 1, 1, 10, 14, true)
 			cellIndex += 1
 			flex.AddItem(sp.StackView, cellIndex, 0, 1, 1, 10, 14, true)
 			cellIndex += 1
-			waitForNewChannelMessage:
-			for ;; {
-				select {
-				case stack = <-newChan:
-					break waitForNewChannelMessage
-				default:
-					time.Sleep(50 * time.Millisecond)
-				}
-			}
+			stackUpdateChan = responseChan
+			responseChan = make(chan StackEntry, 1)
 		}
 	}()
 
