@@ -368,6 +368,9 @@ func EvaluateStack(s StackEntry, namespace *Namespace) StackEntry {
 			return EvaluateStack(tempstack, namespace)
 		case "swap":
 			val1, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			if (val1 == nil || tempstack == nil) {
+				return currentEntry
+			}
 			val2, tempstack := EvaluateStack(tempstack, namespace).Pop()
 			tempstack = &StackStatement{val1.Value(), val1.ValueType(), tempstack}
 			tempstack = &StackStatement{val2.Value(), val2.ValueType(), tempstack}
@@ -493,7 +496,7 @@ type StackPair struct {
 	StackView cview.Primitive
 }
 
-func CreateStackPair(stack StackEntry, namespace *Namespace, stackUpdates chan StackEntry, makeNewEntry chan StackEntry) (*StackPair, StackEntry) {
+func CreateStackPair(stack StackEntry, namespace *Namespace, contextUpdates chan Context, makeNewEntry chan Context) (*StackPair, StackEntry) {
 	if (stack != nil) {
 		stack = stack.Copy()
 	}
@@ -508,11 +511,13 @@ func CreateStackPair(stack StackEntry, namespace *Namespace, stackUpdates chan S
 	inputField.SetFieldWidth(0)
 	inputField.SetDoneFunc(func(key tcell.Key) {
 		// fmt.Println("About to tokenize")
-		if stackUpdates != nil {
+		if contextUpdates != nil {
 			getLatestStack:
 			for ;; {
 				select {
-				case stack = <-stackUpdates:
+				case context := <-contextUpdates:
+					stack = context.Stack
+					namespace = context.Namespace
 					continue
 				default:
 					break getLatestStack
@@ -522,7 +527,7 @@ func CreateStackPair(stack StackEntry, namespace *Namespace, stackUpdates chan S
 
 		text := inputField.GetText()
 		if (text != "") {
-			stack = tokenize(text, stack)
+			stack = tokenize(text, nil)
 			// fmt.Println("Done tokenizing. About to evaluateStack")
 			stack = EvaluateStack(stack, namespace)
 			// fmt.Println("Done eval the stack. About to print the stack")
@@ -535,7 +540,7 @@ func CreateStackPair(stack StackEntry, namespace *Namespace, stackUpdates chan S
 					break emptyOldStackValues
 				}
 			}
-			makeNewEntry <- stack
+			makeNewEntry <- Context{stack, namespace}
 		}
 		if (stack != nil) {
 			box.SetText(stack.String())
@@ -545,6 +550,11 @@ func CreateStackPair(stack StackEntry, namespace *Namespace, stackUpdates chan S
 	})
 
 	return &StackPair{inputField, box}, stack
+}
+
+type Context struct {
+	Stack StackEntry
+	Namespace *Namespace
 }
 
 func main () {
@@ -557,20 +567,23 @@ func main () {
 	app.EnableMouse(true)
 	app.SetRoot(flex, true)
 	cellIndex := 0
-	var stackUpdateChan chan StackEntry = nil
-	responseChan := make(chan StackEntry,1)
+	var stackUpdateChan chan Context = nil
+	responseChan := make(chan Context, 1)
 	func (){
 		x := 0
 		for x < 6 {
 			x += 1
 			sp, _ := CreateStackPair(stack, namespace, stackUpdateChan, responseChan)
-			app.SetFocus(sp.Input)
+			if x == 1 {
+				app.SetFocus(sp.Input)
+			}
+
 			flex.AddItem(sp.Input, cellIndex, 0, 1, 1, 10, 14, true)
 			cellIndex += 1
 			flex.AddItem(sp.StackView, cellIndex, 0, 1, 1, 10, 14, true)
 			cellIndex += 1
 			stackUpdateChan = responseChan
-			responseChan = make(chan StackEntry, 1)
+			responseChan = make(chan Context, 1)
 		}
 	}()
 
