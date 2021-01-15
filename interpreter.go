@@ -283,6 +283,7 @@ func tokenize(text string, stack StackEntry) StackEntry {
 	return result
 }
 
+// Namespace ----------------------------------------------------------
 type Namespace struct {
 	previousNamespace *Namespace
 	funcs map[string]StackEntry
@@ -309,6 +310,8 @@ func MakeChildNamespace(oldNamespace *Namespace) *Namespace {
 	newFuncMap := make(map[string]StackEntry)
 	return &Namespace{oldNamespace, newFuncMap}
 }
+
+//--------------------------------------------------------------------
 
 
 func EvaluateStack(s StackEntry, namespace *Namespace) StackEntry {
@@ -501,6 +504,7 @@ func CreateStackPair(stack StackEntry, namespace *Namespace, contextUpdates chan
 		stack = stack.Copy()
 	}
 
+	parentStack := stack
 	box := cview.NewTextView()
 	box.SetBorder(true)
 	box.SetTitle("stack")
@@ -516,7 +520,7 @@ func CreateStackPair(stack StackEntry, namespace *Namespace, contextUpdates chan
 			for ;; {
 				select {
 				case context := <-contextUpdates:
-					stack = context.Stack
+					parentStack = context.Stack.Copy()
 					namespace = context.Namespace
 					continue
 				default:
@@ -525,9 +529,10 @@ func CreateStackPair(stack StackEntry, namespace *Namespace, contextUpdates chan
 			}
 		}
 
+		stack = parentStack
 		text := inputField.GetText()
 		if (text != "") {
-			stack = tokenize(text, nil)
+			stack = tokenize(text, stack)
 			// fmt.Println("Done tokenizing. About to evaluateStack")
 			stack = EvaluateStack(stack, namespace)
 			// fmt.Println("Done eval the stack. About to print the stack")
@@ -540,6 +545,7 @@ func CreateStackPair(stack StackEntry, namespace *Namespace, contextUpdates chan
 					break emptyOldStackValues
 				}
 			}
+
 			makeNewEntry <- Context{stack, namespace}
 		}
 		if (stack != nil) {
