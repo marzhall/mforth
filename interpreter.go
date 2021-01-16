@@ -1,17 +1,12 @@
 package main
 
 import (
-    //"bufio"
     "fmt"
-    //"os"
-    //"io"
+    "time"
     "strings"
     "strconv"
     "gitlab.com/tslocum/cview"
     "github.com/gdamore/tcell"
-
-    //"runtime/debug"
-    // "reflect"
 )
 
 type ValueType int
@@ -63,12 +58,10 @@ func(s *StackStatement) Append(newEntry StackEntry) {
 }
 
 func(s *StackStatement) Peek() StackEntry {
-	// fmt.Println("s previous is", s.previous.Value())
 	return s.previous
 }
 
 func(s *StackStatement) Previous() StackEntry {
-	// fmt.Println("s previous is", s.previous.Value())
 	return s.previous
 }
 
@@ -512,7 +505,7 @@ func(s *StackPair) Clear() {
 }
 //--------------------------------------------------------------
 
-func CreateStackPair(contextUpdates chan Context, makeNewEntry chan Context, commandNum int) *StackPair {
+func CreateStackPair(contextUpdates chan Context, makeNewEntry chan Context, updateNotify chan int, commandNum int) *StackPair {
 	var stack StackEntry
 	var parentStack StackEntry
 	flex := cview.NewFlex()
@@ -532,7 +525,6 @@ func CreateStackPair(contextUpdates chan Context, makeNewEntry chan Context, com
 	inputField.SetLabel(fmt.Sprintf("@%d: ", commandNum))
 	inputField.SetFieldWidth(0)
 	inputField.SetDoneFunc(func(key tcell.Key) {
-		// fmt.Println("About to tokenize")
 		stackPair.Clear()
 		if contextUpdates != nil {
 			getLatestStack:
@@ -575,6 +567,8 @@ func CreateStackPair(contextUpdates chan Context, makeNewEntry chan Context, com
 		} else {
 			box.SetText("")
 		}
+
+		updateNotify <- commandNum
 	})
 
 	return stackPair
@@ -593,19 +587,35 @@ func main () {
 	cellIndex := 0
 	var stackUpdateChan chan Context = nil
 	responseChan := make(chan Context, 1)
+	updateNotify := make(chan int, 1)
+	cells := make(map [int]*StackPair)
 	func (){
 		x := 0
 		for x < 4 {
-			sp := CreateStackPair(stackUpdateChan, responseChan, x)
+			sp := CreateStackPair(stackUpdateChan, responseChan, updateNotify, x)
 			if x == 0 {
 				app.SetFocus(sp.Input)
 			}
 
 			flex.AddItem(sp.Wrapper, cellIndex, 0, 1, 1, 10, 14, true)
+			cells[cellIndex]=sp
 			cellIndex += 1
 			stackUpdateChan = responseChan
 			responseChan = make(chan Context, 1)
 			x += 1
+		}
+	}()
+
+	go func(){
+		for {
+			select {
+			case updatedCellIndex := <-updateNotify:
+				if cell, ok := cells[updatedCellIndex + 1]; ok {
+					app.SetFocus(cell.Input)
+				}
+			default:
+				time.Sleep(20)
+			}
 		}
 	}()
 
