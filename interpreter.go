@@ -496,6 +496,7 @@ func EvaluateStack(s StackEntry, namespace *Namespace, output *StackPair) StackE
 type StackPair struct {
 	Input cview.Primitive
 	StackView *cview.TextView
+	Wrapper *cview.Flex
 }
 
 func(s *StackPair) AddOut(value string) {
@@ -511,20 +512,24 @@ func(s *StackPair) Clear() {
 }
 //--------------------------------------------------------------
 
-func CreateStackPair(contextUpdates chan Context, makeNewEntry chan Context) *StackPair {
+func CreateStackPair(contextUpdates chan Context, makeNewEntry chan Context, commandNum int) *StackPair {
 	var stack StackEntry
 	var parentStack StackEntry
+	flex := cview.NewFlex()
+	flex.SetDirection(cview.FlexRow)
 	namespace := MakeNamespace(nil)
 	box := cview.NewTextView()
 	box.SetDynamicColors(true)
 	box.SetBorder(true)
-	box.SetTitle("stack")
+	box.SetTitle(fmt.Sprintf("@stack%d", commandNum))
 	box.SetText("")
 
 	inputField := cview.NewInputField()
 
-	stackPair := &StackPair{inputField, box}
-	inputField.SetLabel("@one: ")
+	flex.AddItem(inputField, 1, 0, true)
+	flex.AddItem(box, 0, 6, false)
+	stackPair := &StackPair{inputField, box, flex}
+	inputField.SetLabel(fmt.Sprintf("@%d: ", commandNum))
 	inputField.SetFieldWidth(0)
 	inputField.SetDoneFunc(func(key tcell.Key) {
 		// fmt.Println("About to tokenize")
@@ -591,14 +596,12 @@ func main () {
 	func (){
 		x := 0
 		for x < 4 {
-			sp := CreateStackPair(stackUpdateChan, responseChan)
+			sp := CreateStackPair(stackUpdateChan, responseChan, x)
 			if x == 0 {
 				app.SetFocus(sp.Input)
 			}
 
-			flex.AddItem(sp.Input, cellIndex, 0, 1, 1, 10, 14, true)
-			cellIndex += 1
-			flex.AddItem(sp.StackView, cellIndex, 0, 1, 1, 10, 14, true)
+			flex.AddItem(sp.Wrapper, cellIndex, 0, 1, 1, 10, 14, true)
 			cellIndex += 1
 			stackUpdateChan = responseChan
 			responseChan = make(chan Context, 1)
