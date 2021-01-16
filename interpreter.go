@@ -311,10 +311,8 @@ func MakeNamespace(parent *Namespace) *Namespace {
 	return &Namespace{parent, newFuncMap}
 }
 
-//--------------------------------------------------------------------
-
-
-func EvaluateStack(s StackEntry, namespace *Namespace) StackEntry {
+//---------------------------------------------------------------------
+func EvaluateStack(s StackEntry, namespace *Namespace, output *StackPair) StackEntry {
 	if s == nil {
 		return nil
 	}
@@ -326,119 +324,119 @@ func EvaluateStack(s StackEntry, namespace *Namespace) StackEntry {
 		funcName := currentEntry.Value()
 		funcCopy := namespace.GetFunctionCopy(funcName)
 		if funcCopy == nil {
-			fmt.Println("Couldn't find a function named", funcName)
+			output.AddError(fmt.Sprintf("Couldn't find a function named %s", funcName))
 		} else {
 			funcCopy.Append(tempstack)
 			tempstack = funcCopy
 		}
 
-		return EvaluateStack(tempstack, namespace)
+		return EvaluateStack(tempstack, namespace, output)
 	case FlowControl:
 		switch currentEntry.Value() {
 		case "dec":
 			decStatement, ok := currentEntry.(*DecStatement)
 			if !ok {
-				fmt.Println("ERROR: We got an 'as' statement that isn't a DecStatement type. What's up with that?")
+				output.AddError("ERROR: We got an 'as' statement that isn't a DecStatement type. What's up with that?")
 				return nil
 			}
 
 			funcName, funcDef := decStatement.FuncBody.Pop()
 			namespace.AddFunctionDefinition(funcName.Value(), funcDef)
-			return EvaluateStack(tempstack, namespace)
+			return EvaluateStack(tempstack, namespace, output)
 		case "if":
 			ifStatement, ok := currentEntry.(*IfStatement)
 			if !ok {
-				fmt.Println("We weren't able to cast to an IfStatement Pointer for some reason.")
+				output.AddError("We weren't able to cast to an IfStatement Pointer for some reason.")
 			}
 
-			flowcontrol_value, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			flowcontrol_value, tempstack := EvaluateStack(tempstack, namespace, output).Pop()
 			if (flowcontrol_value.Value() == "true") {
 				ifStatementBranch := ifStatement.Branch.Copy()
 				ifStatementBranch.Append(tempstack)
 				tempstack = ifStatementBranch
 			}
 
-			return EvaluateStack(tempstack, MakeNamespace(namespace))
+			return EvaluateStack(tempstack, MakeNamespace(namespace), output)
 		default:
-			fmt.Println("Interpreter internal error: %s has been identified as a flow control statement, but isn't in our hardcoded list of operators.", currentEntry.Value())
+			output.AddError(fmt.Sprintf("Interpreter internal error: %s has been identified as a flow control statement, but isn't in our hardcoded list of operators.", currentEntry.Value()))
 			return currentEntry
 		}
 	case BuiltinOp:
 		switch currentEntry.Value() {
 		case "as":
-			return EvaluateStack(tempstack, namespace)
+			return EvaluateStack(tempstack, namespace, output)
 		case "then":
-			return EvaluateStack(tempstack, namespace)
+			return EvaluateStack(tempstack, namespace, output)
 		case "swap":
-			val1, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			val1, tempstack := EvaluateStack(tempstack, namespace, output).Pop()
 			if (val1 == nil || tempstack == nil) {
 				return currentEntry
 			}
-			val2, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			val2, tempstack := EvaluateStack(tempstack, namespace, output).Pop()
 			tempstack = &StackStatement{val1.Value(), val1.ValueType(), tempstack}
 			tempstack = &StackStatement{val2.Value(), val2.ValueType(), tempstack}
 			return tempstack
 		case "drop":
-			_, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			_, tempstack := EvaluateStack(tempstack, namespace, output).Pop()
 			return tempstack
 		case "dup":
-			firstVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			firstVar, tempstack := EvaluateStack(tempstack, namespace, output).Pop()
 			tempstack = &StackStatement{firstVar.Value(), firstVar.ValueType(), tempstack}
 			tempstack = &StackStatement{firstVar.Value(), firstVar.ValueType(), tempstack}
 			return tempstack
 		case "*":
-			firstVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			firstVar, tempstack := EvaluateStack(tempstack, namespace, output).Pop()
 			if (firstVar == nil || tempstack == nil) {
 				return currentEntry
 			}
 			firstValue := firstVar.Value()
 			valOneFloat, _ := strconv.ParseFloat(firstValue, 64)
-			secondVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			secondVar, tempstack := EvaluateStack(tempstack, namespace, output).Pop()
 			secondValue := secondVar.Value()
 			valTwoFloat, _ := strconv.ParseFloat(secondValue, 64)
 			tempstack = &StackStatement{strconv.FormatFloat(valOneFloat * valTwoFloat, 'f', -1, 64), Num, tempstack}
 			return tempstack
 		case "/":
-			firstVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			firstVar, tempstack := EvaluateStack(tempstack, namespace, output).Pop()
 			if (firstVar == nil || tempstack == nil) {
 				return currentEntry
 			}
 			firstValue := firstVar.Value()
 			valOneFloat, _ := strconv.ParseFloat(firstValue, 64)
-			secondVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			secondVar, tempstack := EvaluateStack(tempstack, namespace, output).Pop()
 			secondValue := secondVar.Value()
 			valTwoFloat, _ := strconv.ParseFloat(secondValue, 64)
 			tempstack = &StackStatement{strconv.FormatFloat(valTwoFloat / valOneFloat, 'f', -1, 64), Num, tempstack}
 			return tempstack
 		case "==":
-			firstVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			firstVar, tempstack := EvaluateStack(tempstack, namespace, output).Pop()
 			if (firstVar == nil || tempstack == nil) {
 				return currentEntry
 			}
 			firstValue := firstVar.Value()
-			secondVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			secondVar, tempstack := EvaluateStack(tempstack, namespace, output).Pop()
 			secondValue := secondVar.Value()
 			tempstack = &StackStatement{goBoolToMforthBool(firstValue == secondValue), Num, tempstack}
 			return tempstack
 		case ".":
-			fmt.Println("The stack before evaluating the . operator:\n", currentEntry)
-			evalResults := EvaluateStack(tempstack, namespace)
-			fmt.Println("The stack after evaluating the . operator:\n", evalResults)
+			output.AddOut(fmt.Sprintf("The stack before evaluating the . operator:\n %s", currentEntry))
+			evalResults := EvaluateStack(tempstack, namespace, output)
+			output.AddOut(fmt.Sprintf("The stack after evaluating the . operator:\n %s\n", evalResults))
 			return evalResults
 		case ">":
-			firstVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			firstVar, tempstack := EvaluateStack(tempstack, namespace, output).Pop()
 			if (firstVar == nil || tempstack == nil) {
 				return currentEntry
 			}
 			firstValue := firstVar.Value()
 			valOneFloat, _ := strconv.ParseFloat(firstValue, 64)
-			secondVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			secondVar, tempstack := EvaluateStack(tempstack, namespace, output).Pop()
 			secondValue := secondVar.Value()
 			valTwoFloat, _ := strconv.ParseFloat(secondValue, 64)
 			tempstack = &StackStatement{goBoolToMforthBool(valOneFloat > valTwoFloat), Num, tempstack}
 			return tempstack
 		case "!":
-			firstVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			firstVar, tempstack := EvaluateStack(tempstack, namespace, output).Pop()
 			firstValue := firstVar.Value()
 			result := "true"
 			if (firstValue == "true") {
@@ -448,43 +446,43 @@ func EvaluateStack(s StackEntry, namespace *Namespace) StackEntry {
 			tempstack = &StackStatement{result, Bool, tempstack}
 			return tempstack
 		case "<":
-			firstVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			firstVar, tempstack := EvaluateStack(tempstack, namespace, output).Pop()
 			if (firstVar == nil || tempstack == nil) {
 				return currentEntry
 			}
 			firstValue := firstVar.Value()
 			valOneFloat, _ := strconv.ParseFloat(firstValue, 64)
-			secondVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			secondVar, tempstack := EvaluateStack(tempstack, namespace, output).Pop()
 			secondValue := secondVar.Value()
 			valTwoFloat, _ := strconv.ParseFloat(secondValue, 64)
 			tempstack = &StackStatement{goBoolToMforthBool(valOneFloat < valTwoFloat), Num, tempstack}
 			return tempstack
 		case "+":
-			firstVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			firstVar, tempstack := EvaluateStack(tempstack, namespace, output).Pop()
 			if (firstVar == nil || tempstack == nil) {
 				return currentEntry
 			}
 			firstValue := firstVar.Value()
 			valOneFloat, _ := strconv.ParseFloat(firstValue, 64)
-			secondVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			secondVar, tempstack := EvaluateStack(tempstack, namespace, output).Pop()
 			secondValue := secondVar.Value()
 			valTwoFloat, _ := strconv.ParseFloat(secondValue, 64)
 			tempstack = &StackStatement{strconv.FormatFloat(valOneFloat + valTwoFloat, 'f', -1, 64), Num, tempstack}
 			return tempstack
 		case "-":
-			firstVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			firstVar, tempstack := EvaluateStack(tempstack, namespace, output).Pop()
 			if (firstVar == nil || tempstack == nil) {
 				return currentEntry
 			}
 			firstValue := firstVar.Value()
 			valOneFloat, _ := strconv.ParseFloat(firstValue, 64)
-			secondVar, tempstack := EvaluateStack(tempstack, namespace).Pop()
+			secondVar, tempstack := EvaluateStack(tempstack, namespace, output).Pop()
 			secondValue := secondVar.Value()
 			valTwoFloat, _ := strconv.ParseFloat(secondValue, 64)
 			tempstack = &StackStatement{strconv.FormatFloat(valTwoFloat - valOneFloat, 'f', -1, 64), Num, tempstack}
 			return tempstack
 		default:
-			fmt.Println("Interpreter internal error: %s has been identified as an operator, but isn't in our hardcoded list of operators.", currentEntry.Value())
+			output.AddError(fmt.Sprintf("Interpreter internal error: %s has been identified as an operator, but isn't in our hardcoded list of operators.", currentEntry.Value()))
 			return currentEntry
 		}
 	default:
@@ -494,25 +492,43 @@ func EvaluateStack(s StackEntry, namespace *Namespace) StackEntry {
 	return tempstack
 }
 
+// StackPair----------------------------------------------------
 type StackPair struct {
 	Input cview.Primitive
-	StackView cview.Primitive
+	StackView *cview.TextView
 }
+
+func(s *StackPair) AddOut(value string) {
+	s.StackView.SetText(s.StackView.GetText(true) + value + "\n")
+}
+
+func(s *StackPair) AddError(value string) {
+	s.StackView.SetText(s.StackView.GetText(true) + "[yellow[]" + value + "[-[]\n")
+}
+
+func(s *StackPair) Clear() {
+	s.StackView.SetText("")
+}
+//--------------------------------------------------------------
 
 func CreateStackPair(contextUpdates chan Context, makeNewEntry chan Context) *StackPair {
 	var stack StackEntry
 	var parentStack StackEntry
 	namespace := MakeNamespace(nil)
 	box := cview.NewTextView()
+	box.SetDynamicColors(true)
 	box.SetBorder(true)
 	box.SetTitle("stack")
 	box.SetText("")
 
 	inputField := cview.NewInputField()
+
+	stackPair := &StackPair{inputField, box}
 	inputField.SetLabel("@one: ")
 	inputField.SetFieldWidth(0)
 	inputField.SetDoneFunc(func(key tcell.Key) {
 		// fmt.Println("About to tokenize")
+		stackPair.Clear()
 		if contextUpdates != nil {
 			getLatestStack:
 			for ;; {
@@ -536,7 +552,7 @@ func CreateStackPair(contextUpdates chan Context, makeNewEntry chan Context) *St
 		text := inputField.GetText()
 		if (text != "") {
 			stack = tokenize(text, stack)
-			stack = EvaluateStack(stack, namespace)
+			stack = EvaluateStack(stack, namespace, stackPair)
 			emptyOldStackValues:
 			for ;; {
 				select {
@@ -550,13 +566,13 @@ func CreateStackPair(contextUpdates chan Context, makeNewEntry chan Context) *St
 			makeNewEntry <- Context{stack, namespace}
 		}
 		if (stack != nil) {
-			box.SetText(stack.String())
+			box.SetText(box.GetText(true) + stack.String())
 		} else {
 			box.SetText("")
 		}
 	})
 
-	return &StackPair{inputField, box}
+	return stackPair
 }
 
 type Context struct {
@@ -574,7 +590,7 @@ func main () {
 	responseChan := make(chan Context, 1)
 	func (){
 		x := 0
-		for x < 6 {
+		for x < 4 {
 			sp := CreateStackPair(stackUpdateChan, responseChan)
 			if x == 0 {
 				app.SetFocus(sp.Input)
