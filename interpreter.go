@@ -306,9 +306,9 @@ func(n *Namespace) GetFunctionCopy(name string) StackEntry {
 	return funcDef.Copy()
 }
 
-func MakeChildNamespace(oldNamespace *Namespace) *Namespace {
+func MakeNamespace(parent *Namespace) *Namespace {
 	newFuncMap := make(map[string]StackEntry)
-	return &Namespace{oldNamespace, newFuncMap}
+	return &Namespace{parent, newFuncMap}
 }
 
 //--------------------------------------------------------------------
@@ -358,7 +358,7 @@ func EvaluateStack(s StackEntry, namespace *Namespace) StackEntry {
 				tempstack = ifStatementBranch
 			}
 
-			return EvaluateStack(tempstack, MakeChildNamespace(namespace))
+			return EvaluateStack(tempstack, MakeNamespace(namespace))
 		default:
 			fmt.Println("Interpreter internal error: %s has been identified as a flow control statement, but isn't in our hardcoded list of operators.", currentEntry.Value())
 			return currentEntry
@@ -499,12 +499,10 @@ type StackPair struct {
 	StackView cview.Primitive
 }
 
-func CreateStackPair(stack StackEntry, namespace *Namespace, contextUpdates chan Context, makeNewEntry chan Context) (*StackPair, StackEntry) {
-	if (stack != nil) {
-		stack = stack.Copy()
-	}
-
-	parentStack := stack
+func CreateStackPair(contextUpdates chan Context, makeNewEntry chan Context) *StackPair {
+	var stack StackEntry
+	var parentStack StackEntry
+	namespace := MakeNamespace(nil)
 	box := cview.NewTextView()
 	box.SetBorder(true)
 	box.SetTitle("stack")
@@ -520,7 +518,12 @@ func CreateStackPair(stack StackEntry, namespace *Namespace, contextUpdates chan
 			for ;; {
 				select {
 				case context := <-contextUpdates:
-					parentStack = context.Stack.Copy()
+					if ( context.Stack != nil) {
+						parentStack = context.Stack.Copy()
+					} else {
+						parentStack = nil
+					}
+
 					namespace = context.Namespace
 					continue
 				default:
@@ -533,9 +536,7 @@ func CreateStackPair(stack StackEntry, namespace *Namespace, contextUpdates chan
 		text := inputField.GetText()
 		if (text != "") {
 			stack = tokenize(text, stack)
-			// fmt.Println("Done tokenizing. About to evaluateStack")
 			stack = EvaluateStack(stack, namespace)
-			// fmt.Println("Done eval the stack. About to print the stack")
 			emptyOldStackValues:
 			for ;; {
 				select {
@@ -555,7 +556,7 @@ func CreateStackPair(stack StackEntry, namespace *Namespace, contextUpdates chan
 		}
 	})
 
-	return &StackPair{inputField, box}, stack
+	return &StackPair{inputField, box}
 }
 
 type Context struct {
@@ -564,10 +565,6 @@ type Context struct {
 }
 
 func main () {
-	//reader := bufio.NewReader(os.Stdin)
-	var stack StackEntry = nil
-	namespace := MakeChildNamespace(nil)
-
 	app := cview.NewApplication()
 	flex := cview.NewGrid()
 	app.EnableMouse(true)
@@ -578,9 +575,8 @@ func main () {
 	func (){
 		x := 0
 		for x < 6 {
-			x += 1
-			sp, _ := CreateStackPair(stack, namespace, stackUpdateChan, responseChan)
-			if x == 1 {
+			sp := CreateStackPair(stackUpdateChan, responseChan)
+			if x == 0 {
 				app.SetFocus(sp.Input)
 			}
 
@@ -590,6 +586,7 @@ func main () {
 			cellIndex += 1
 			stackUpdateChan = responseChan
 			responseChan = make(chan Context, 1)
+			x += 1
 		}
 	}()
 
